@@ -1,0 +1,20 @@
+# 这个配置文件相当于前端项目里的环境配置文件。
+# 学习阶段先只保留最常用、最容易理解的配置项。
+
+server:
+  # 服务端口，启动后访问 http://localhost:8080
+  port: 8080
+
+spring:
+  application:
+    # 应用名主要用于日志、监控、服务识别。
+    name: sms-admin-lite
+
+  jackson:
+    # 让 LocalDateTime 返回得更直观一些，方便你调试接口。
+    time-zone: Asia/Shanghai
+
+logging:
+  level:
+    root: info
+    com.mtjava.smsadminlite: info

@@ -31,7 +31,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    @Transactional
+    @Transactional // 添加事务注解，确保数据一致性：一起成功或一起失败
     public User createUser(CreateUserRequest request) {
         // selectByPhone 找不到时 MyBatis 返回 null，不是 Optional，直接判空即可
         User existing = userMapper.selectByPhone(request.getPhone());

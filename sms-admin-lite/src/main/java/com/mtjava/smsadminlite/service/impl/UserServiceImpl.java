@@ -1,47 +1,51 @@
 package com.mtjava.smsadminlite.service.impl;
 
 import com.mtjava.smsadminlite.dto.CreateUserRequest;
+import com.mtjava.smsadminlite.mapper.UserMapper;
 import com.mtjava.smsadminlite.model.User;
-import com.mtjava.smsadminlite.repository.UserRepository;
 import com.mtjava.smsadminlite.service.UserService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 业务层实现。
+ * 用户业务层实现。
  *
- * 这里负责真正的业务动作：
- * 1. 查询数据
- * 2. 执行业务校验
- * 3. 组装模型
- * 4. 调用 repository 持久化
+ * 之前依赖 InMemoryUserRepository，现在改为注入 UserMapper，
+ * 数据真正写入 MySQL。其他逻辑保持不变。
  */
 @Service
 public class UserServiceImpl implements UserService {
 
-    private final UserRepository userRepository;
+    private final UserMapper userMapper;
 
-    public UserServiceImpl(UserRepository userRepository) {
-        this.userRepository = userRepository;
+    public UserServiceImpl(UserMapper userMapper) {
+        this.userMapper = userMapper;
     }
 
     @Override
     public List<User> listUsers() {
-        return userRepository.findAll();
+        return userMapper.selectAll();
     }
 
     @Override
+    @Transactional
     public User createUser(CreateUserRequest request) {
-        userRepository.findByPhone(request.getPhone()).ifPresent(user -> {
+        // selectByPhone 找不到时 MyBatis 返回 null，不是 Optional，直接判空即可
+        User existing = userMapper.selectByPhone(request.getPhone());
+        if (existing != null) {
             throw new IllegalArgumentException("手机号已存在，不能重复创建");
-        });
+        }
 
         User user = new User();
         user.setName(request.getName());
         user.setPhone(request.getPhone());
         user.setCreatedAt(LocalDateTime.now());
-        return userRepository.save(user);
+
+        // insert 执行后，user.id 会被 MyBatis 自动回填（useGeneratedKeys）
+        userMapper.insert(user);
+        return user;
     }
 }

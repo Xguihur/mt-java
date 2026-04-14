@@ -1,0 +1,21 @@
+# 测试环境配置。
+# 用 H2 内存数据库代替 MySQL，跑单测时不需要本地启动 MySQL。
+# H2 是内嵌数据库，Spring Boot 默认会自动执行 schema.sql（sql.init.mode 默认是 embedded）。
+
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;MODE=MySQL
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 1000ms
+
+mybatis:
+  mapper-locations: classpath:mapper/*.xml
+  configuration:
+    map-underscore-to-camel-case: true

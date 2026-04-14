@@ -3,10 +3,10 @@ package com.mtjava.smsadminlite.model;
 import java.time.LocalDateTime;
 
 /**
- * 领域模型。
+ * 用户模型（POJO）。
  *
- * 在后续接数据库后，它通常会演变成 entity / po / domain 这一类对象。
- * 这里先保留最简单的用户字段，帮助你理解 Java 类如何承载业务数据。
+ * MyBatis 直接把查询结果映射到这个类，不需要任何注解。
+ * 字段名遵循驼峰命名，对应数据库下划线列名（created_at → createdAt）由 MyBatis 配置自动处理。
  */
 public class User {
 

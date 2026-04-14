@@ -1,12 +1,10 @@
 com/mtjava/smsadminlite/service/impl/UserServiceImpl.class
 com/mtjava/smsadminlite/common/ApiResponse.class
+com/mtjava/smsadminlite/SmsAdminLiteApplication.class
+com/mtjava/smsadminlite/controller/HealthController.class
 com/mtjava/smsadminlite/dto/CreateUserRequest.class
-com/mtjava/smsadminlite/repository/InMemoryUserRepository.class
 com/mtjava/smsadminlite/controller/UserController.class
 com/mtjava/smsadminlite/model/User.class
 com/mtjava/smsadminlite/service/UserService.class
-com/mtjava/smsadminlite/SmsAdminLiteApplication.class
 com/mtjava/smsadminlite/common/GlobalExceptionHandler.class
-com/mtjava/smsadminlite/repository/UserRepository.class
 com/mtjava/smsadminlite/config/DataInitializer.class
-com/mtjava/smsadminlite/controller/HealthController.class

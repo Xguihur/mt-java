@@ -15,7 +15,7 @@ spring:
     # 把 your_password 改成你本地 MySQL 的密码；数据库名 mt_java 需要提前创建。
     url: jdbc:mysql://localhost:3306/mt_java?useSSL=false&serverTimezone=Asia/Shanghai&characterEncoding=utf8
     username: root
-    password: your_password
+    password: 123456
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   # ── 自动建表 ─────────────────────────────────────────────

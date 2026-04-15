@@ -8,6 +8,7 @@ import com.mtjava.smsadminlite.model.RedPacket;
 import com.mtjava.smsadminlite.model.RedPacketRecord;
 import com.mtjava.smsadminlite.model.User;
 import com.mtjava.smsadminlite.service.RedPacketService;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +29,53 @@ public class RedPacketServiceImpl implements RedPacketService {
      */
     private static final String KEY_AMOUNTS = "rp:%d:amounts";
     private static final String KEY_GRABBED = "rp:%d:grabbed";
+    /** Lua 返回码：当前用户已经抢过，Java 层据此抛出"不可重复抢"提示。 */
+    private static final String LUA_DUPLICATE = "DUPLICATE";
+    /** Lua 返回码：金额列表已空，Java 层据此抛出"红包已抢完"提示。 */
+    private static final String LUA_EMPTY = "EMPTY";
+    private static final DefaultRedisScript<String> GRAB_SCRIPT = new DefaultRedisScript<>();
+
+    static {
+        /*
+         * 把"判重 + 抢金额 + 抢完回滚资格"放进一段 Lua 脚本里，
+         * 让 Redis 在服务端一次性执行完整流程。
+         *
+         * KEYS[1] = rp:{id}:grabbed，已抢用户 Set
+         * KEYS[2] = rp:{id}:amounts，待抢金额 List
+         * ARGV[1] = 当前用户 userId
+         *
+         * 逐行含义：
+         * 1. SADD grabbed userId
+         *    - 返回 1：第一次抢，可以继续
+         *    - 返回 0：已经抢过，直接返回 DUPLICATE
+         * 2. LPOP amounts
+         *    - 弹出一个金额，谁先执行到这里谁先拿到
+         *    - 如果返回 nil，说明红包已经抢完
+         * 3. 如果抢完，则 SREM 回滚前面写入的抢资格记录
+         *    - 否则这个用户会被错误地标记为"已经抢过"
+         * 4. 返回金额字符串给 Java 层继续落库
+         *
+         * 对比旧版两步式实现：
+         * - 旧版：Java 先调一次 SADD，再调一次 LPOP
+         * - 新版：Java 只发一次 EVAL，Redis 内部把两步连续做完
+         *
+         * 这样做的价值不是"写法更炫"，而是把多个相关动作收敛成
+         * 一个不可被其他并发请求插入打断的原子过程。
+         */
+        GRAB_SCRIPT.setScriptText(
+                "local added = redis.call('SADD', KEYS[1], ARGV[1])\n"
+                        + "if added == 0 then\n"
+                        + "    return '" + LUA_DUPLICATE + "'\n"
+                        + "end\n"
+                        + "local amount = redis.call('LPOP', KEYS[2])\n"
+                        + "if not amount then\n"
+                        + "    redis.call('SREM', KEYS[1], ARGV[1])\n"
+                        + "    return '" + LUA_EMPTY + "'\n"
+                        + "end\n"
+                        + "return amount"
+        );
+        GRAB_SCRIPT.setResultType(String.class);
+    }
 
     private final RedPacketMapper       redPacketMapper;
     private final RedPacketRecordMapper recordMapper;
@@ -82,30 +130,34 @@ public class RedPacketServiceImpl implements RedPacketService {
         String grabbedKey = String.format(KEY_GRABBED, redPacketId);
         String amountsKey = String.format(KEY_AMOUNTS, redPacketId);
 
-        // 1. SADD：把 userId 加入"已抢集合"
-        //    返回 1 = 第一次抢（成功），返回 0 = 已经抢过（拦截）
-        Long added = redisTemplate.opsForSet().add(grabbedKey, userId.toString());
-        if (added == null || added == 0L) {
+        // 1. 用 Lua 脚本把"判重 + 弹金额 + 抢完回滚资格"合成一次 Redis 原子执行
+        //    返回 DUPLICATE：已抢过
+        //    返回 EMPTY：红包已空
+        //    返回数字字符串：抢到的金额（单位：分）
+        String grabResult = redisTemplate.execute(
+                GRAB_SCRIPT,
+                List.of(grabbedKey, amountsKey),
+                userId.toString()
+        );
+        if (grabResult == null) {
+            throw new IllegalStateException("Redis 抢红包脚本执行失败");
+        }
+        if (LUA_DUPLICATE.equals(grabResult)) {
             throw new IllegalArgumentException("您已经抢过这个红包了");
         }
-
-        // 2. LPOP：原子弹出一个金额，天然防超发
-        String amountStr = redisTemplate.opsForList().leftPop(amountsKey);
-        if (amountStr == null) {
-            // 红包已抢完，把刚加的 userId 从 Set 里撤回，下次请求能看到"已抢完"提示
-            redisTemplate.opsForSet().remove(grabbedKey, userId.toString());
+        if (LUA_EMPTY.equals(grabResult)) {
             throw new IllegalArgumentException("手慢了，红包已被抢完");
         }
 
-        int amountCents = Integer.parseInt(amountStr);
+        int amountCents = Integer.parseInt(grabResult);
 
-        // 3. 查用户（记录里冗余用户名，方便展示）
+        // 2. 查用户（记录里冗余用户名，方便展示）
         User user = userMapper.selectById(userId);
         if (user == null) {
             throw new IllegalArgumentException("用户不存在，userId=" + userId);
         }
 
-        // 4. 写抢包记录到 MySQL
+        // 3. 写抢包记录到 MySQL
         RedPacketRecord record = new RedPacketRecord();
         record.setRedPacketId(redPacketId);
         record.setUserId(userId);
@@ -114,7 +166,7 @@ public class RedPacketServiceImpl implements RedPacketService {
         record.setGrabbedAt(LocalDateTime.now());
         recordMapper.insert(record);
 
-        // 5. 原子更新 MySQL 里的剩余数量（展示用）
+        // 4. 原子更新 MySQL 里的剩余数量（展示用）
         redPacketMapper.decrementRemain(redPacketId, amountCents);
 
         return record;

@@ -309,7 +309,274 @@ Lua 版在 Redis 内部的单次执行实际相当于：
 
 ---
 
-## 8. 当前实现的边界
+## 8. `LPOP`、`SADD`、`SREM` 到底是什么意思
+
+这几个都是 Redis 原生命令。
+
+在 Java 里你看到的是：
+
+```java
+redisTemplate.opsForList().leftPop(key)
+redisTemplate.opsForSet().add(key, value)
+redisTemplate.opsForSet().remove(key, value)
+```
+
+它们对应到底层 Redis 命令分别是：
+
+- `leftPop` 对应 `LPOP`
+- `add` 对应 `SADD`
+- `remove` 对应 `SREM`
+
+也就是说，看起来像 Java 方法，实际是在通过 Spring Data Redis 调 Redis 命令。
+
+### 8.1 `LPOP`
+
+全称可以理解为：`Left Pop`
+
+含义：
+
+- 从 Redis List 的左边弹出一个元素
+- 弹出的同时，这个元素会从 List 里被删除
+
+例子：
+
+```text
+原列表: [88, 16, 5]
+执行 LPOP 后:
+返回 88
+剩余 [16, 5]
+```
+
+在红包场景里，它表示：
+
+- 从“剩余红包金额列表”里拿走一份金额
+
+### 8.2 `SADD`
+
+可以理解为：`Set Add`
+
+含义：
+
+- 往 Redis 的 Set 集合里添加一个元素
+
+特点：
+
+- Set 天然去重
+- 如果元素原来不存在，返回 `1`
+- 如果元素原来已经存在，返回 `0`
+
+例子：
+
+```text
+原集合: {1001, 1002}
+执行 SADD grabbed 1003 -> 返回 1
+执行后: {1001, 1002, 1003}
+
+再次执行 SADD grabbed 1003 -> 返回 0
+集合不变: {1001, 1002, 1003}
+```
+
+在红包场景里，它表示：
+
+- 把当前用户标记为“已经抢过”
+
+### 8.3 `SREM`
+
+可以理解为：`Set Remove`
+
+含义：
+
+- 从 Redis 的 Set 集合里删除一个元素
+
+例子：
+
+```text
+原集合: {1001, 1002, 1003}
+执行 SREM grabbed 1003
+执行后: {1001, 1002}
+```
+
+在红包场景里，它表示：
+
+- 如果前面先标记了“抢过”
+- 但后面发现红包其实已经空了
+- 那就把这个用户从“已抢集合”里删掉，恢复一致状态
+
+### 8.4 为什么这里选 Set 和 List
+
+因为它们和业务语义很贴合：
+
+- `Set` 适合做“判重”
+- `List` 适合做“按份取走一个元素”
+
+所以红包里常见的建模就是：
+
+- `Set` 记录“谁抢过了”
+- `List` 记录“还有哪些金额可抢”
+
+---
+
+## 9. Redis 还有哪些常见 API
+
+Redis 的命令很多，但学习时不用一口气全背。  
+更好的方式是先按“数据结构”来记。
+
+### 9.1 String 字符串
+
+常见命令：
+
+- `SET key value`
+- `GET key`
+- `INCR key`
+- `DECR key`
+- `DEL key`
+- `EXPIRE key seconds`
+
+适合场景：
+
+- 缓存单个值
+- 计数器
+- 验证码
+- 分布式锁中的简单标记
+
+### 9.2 List 列表
+
+常见命令：
+
+- `LPUSH key value`
+- `RPUSH key value`
+- `LPOP key`
+- `RPOP key`
+- `LRANGE key start stop`
+- `LLEN key`
+
+适合场景：
+
+- 消息队列的简单实现
+- 有顺序的数据流
+- 抢红包这种“按份弹出”
+
+### 9.3 Set 集合
+
+常见命令：
+
+- `SADD key member`
+- `SREM key member`
+- `SISMEMBER key member`
+- `SMEMBERS key`
+- `SCARD key`
+
+适合场景：
+
+- 去重
+- 标签集合
+- 某人是否参加过某活动
+
+### 9.4 Hash 哈希
+
+常见命令：
+
+- `HSET key field value`
+- `HGET key field`
+- `HGETALL key`
+- `HDEL key field`
+- `HEXISTS key field`
+
+适合场景：
+
+- 存结构化对象
+- 用户信息、商品信息这类字段型数据
+
+### 9.5 ZSet 有序集合
+
+常见命令：
+
+- `ZADD key score member`
+- `ZRANGE key start stop`
+- `ZREVRANGE key start stop`
+- `ZRANK key member`
+- `ZREM key member`
+
+适合场景：
+
+- 排行榜
+- 按分数排序的数据
+- 延时任务的一些实现
+
+### 9.6 其他常见能力
+
+除了这些结构命令，还有一些经常用到的能力：
+
+- `EXISTS`：判断 key 是否存在
+- `TTL`：查看剩余过期时间
+- `EXPIRE`：设置过期时间
+- `MULTI / EXEC`：事务
+- `EVAL`：执行 Lua 脚本
+- `PUBLISH / SUBSCRIBE`：发布订阅
+
+---
+
+## 10. 我应该去哪里了解 Redis 还有哪些 API
+
+建议按下面这个顺序学，会比较顺：
+
+### 10.1 先学 Redis 数据结构和核心命令
+
+优先理解：
+
+- String
+- List
+- Set
+- Hash
+- ZSet
+
+因为大部分命令其实都是围绕这几个结构展开的。
+
+### 10.2 再结合 Java 里的 `StringRedisTemplate` 去对照
+
+例如：
+
+- `opsForValue()` 对应 String
+- `opsForList()` 对应 List
+- `opsForSet()` 对应 Set
+- `opsForHash()` 对应 Hash
+- `opsForZSet()` 对应 ZSet
+
+你以后看到 Java 代码时，可以主动在脑子里翻译成 Redis 命令：
+
+- `opsForSet().add(...)` -> `SADD`
+- `opsForList().leftPop(...)` -> `LPOP`
+- `opsForValue().increment(...)` -> `INCR`
+
+这样理解会特别快。
+
+### 10.3 最推荐的资料方向
+
+- Redis 官方命令文档：适合查某个命令的精确定义和返回值
+- Spring Data Redis 文档：适合查 Java API 和 Redis 命令怎么对应
+- 自己本地用 `redis-cli` 练习：最适合建立直觉
+
+如果你本地装了 Redis，可以自己试：
+
+```bash
+redis-cli
+```
+
+然后执行：
+
+```text
+SADD grabbed 1001
+SADD grabbed 1001
+LPUSH amounts 5 16 88
+LPOP amounts
+SMEMBERS grabbed
+```
+
+你会非常直观地看到这些命令在干什么。
+
+---
+
+## 11. 当前实现的边界
 
 现在这版已经把 Redis 抢资格阶段做得更严谨了，但仍然要区分两类数据：
 
@@ -325,7 +592,7 @@ Lua 版在 Redis 内部的单次执行实际相当于：
 
 ---
 
-## 9. 最后一句总结
+## 12. 最后一句总结
 
 Lua 脚本的价值，不是把代码写得更复杂，而是把：
 

@@ -2,11 +2,14 @@ package com.mtjava.smsadminlite.controller;
 
 import com.mtjava.smsadminlite.common.ApiResponse;
 import com.mtjava.smsadminlite.dto.CreateUserRequest;
+import com.mtjava.smsadminlite.dto.UpdateUserRequest;
 import com.mtjava.smsadminlite.model.User;
 import com.mtjava.smsadminlite.service.UserService;
 import jakarta.validation.Valid;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -34,8 +37,19 @@ public class UserController {
         return ApiResponse.success(userService.listUsers());
     }
 
+    @GetMapping("/{id}")
+    public ApiResponse<User> getUserById(@PathVariable Long id) {
+        return ApiResponse.success(userService.getUserById(id));
+    }
+
     @PostMapping
     public ApiResponse<User> createUser(@Valid @RequestBody CreateUserRequest request) {
         return ApiResponse.success("创建成功", userService.createUser(request));
+    }
+
+    @PutMapping("/{id}")
+    public ApiResponse<User> updateUser(@PathVariable Long id,
+                                        @Valid @RequestBody UpdateUserRequest request) {
+        return ApiResponse.success("更新成功", userService.updateUser(id, request));
     }
 }

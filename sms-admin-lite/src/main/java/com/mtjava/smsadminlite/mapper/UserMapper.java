@@ -21,8 +21,12 @@ public interface UserMapper {
 
     User selectByPhone(@Param("phone") String phone);
 
+    User selectByPhoneExcludingId(@Param("phone") String phone, @Param("id") Long id);
+
     /** insert 完成后，MyBatis 会把数据库生成的自增 id 回填到 user.id 字段。 */
     void insert(User user);
+
+    void update(User user);
 
     long count();
 }

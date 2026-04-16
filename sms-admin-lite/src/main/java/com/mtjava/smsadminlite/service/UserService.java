@@ -1,6 +1,7 @@
 package com.mtjava.smsadminlite.service;
 
 import com.mtjava.smsadminlite.dto.CreateUserRequest;
+import com.mtjava.smsadminlite.dto.UpdateUserRequest;
 import com.mtjava.smsadminlite.model.User;
 
 import java.util.List;
@@ -15,5 +16,9 @@ public interface UserService {
 
     List<User> listUsers();
 
+    User getUserById(Long id);
+
     User createUser(CreateUserRequest request);
+
+    User updateUser(Long id, UpdateUserRequest request);
 }

@@ -32,6 +32,14 @@
         LIMIT 1
     </select>
 
+    <select id="selectByPhoneExcludingId" resultType="com.mtjava.smsadminlite.model.User">
+        SELECT id, name, phone, created_at
+        FROM users
+        WHERE phone = #{phone}
+          AND id != #{id}
+        LIMIT 1
+    </select>
+
     <!--
       useGeneratedKeys="true"  ：告诉 MyBatis 使用数据库的自增主键。
       keyProperty="id"         ：把生成的主键值回填到传入 User 对象的 id 字段。
@@ -41,6 +49,13 @@
         INSERT INTO users (name, phone, created_at)
         VALUES (#{name}, #{phone}, #{createdAt})
     </insert>
+
+    <update id="update">
+        UPDATE users
+        SET name = #{name},
+            phone = #{phone}
+        WHERE id = #{id}
+    </update>
 
     <select id="count" resultType="long">
         SELECT COUNT(*) FROM users

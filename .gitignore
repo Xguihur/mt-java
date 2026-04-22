@@ -1,3 +1,15 @@
+# IntelliJ
+.idea/
+*.iml
+out/
+
+# Maven
+target/
+sms-admin-lite/target/
+
+# Logs
+*.log
+
+# Mac
 .DS_Store
 **/.DS_Store
-sms-admin-lite/target/

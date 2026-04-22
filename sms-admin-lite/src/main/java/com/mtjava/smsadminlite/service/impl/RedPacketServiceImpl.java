@@ -1,5 +1,6 @@
 package com.mtjava.smsadminlite.service.impl;
 
+import com.mtjava.smsadminlite.common.BusinessException;
 import com.mtjava.smsadminlite.dto.CreateRedPacketRequest;
 import com.mtjava.smsadminlite.mapper.RedPacketMapper;
 import com.mtjava.smsadminlite.mapper.RedPacketRecordMapper;
@@ -100,7 +101,7 @@ public class RedPacketServiceImpl implements RedPacketService {
         int count = request.getTotalCount();
 
         if (total < count) {
-            throw new IllegalArgumentException("红包总金额（分）不能少于红包个数，每个红包至少 1 分");
+            throw BusinessException.badRequest("红包总金额（分）不能少于红包个数，每个红包至少 1 分");
         }
 
         // 1. 二倍均值法拆金额
@@ -143,10 +144,10 @@ public class RedPacketServiceImpl implements RedPacketService {
             throw new IllegalStateException("Redis 抢红包脚本执行失败");
         }
         if (LUA_DUPLICATE.equals(grabResult)) {
-            throw new IllegalArgumentException("您已经抢过这个红包了");
+            throw BusinessException.conflict("您已经抢过这个红包了");
         }
         if (LUA_EMPTY.equals(grabResult)) {
-            throw new IllegalArgumentException("手慢了，红包已被抢完");
+            throw BusinessException.conflict("手慢了，红包已被抢完");
         }
 
         int amountCents = Integer.parseInt(grabResult);
@@ -154,7 +155,7 @@ public class RedPacketServiceImpl implements RedPacketService {
         // 2. 查用户（记录里冗余用户名，方便展示）
         User user = userMapper.selectById(userId);
         if (user == null) {
-            throw new IllegalArgumentException("用户不存在，userId=" + userId);
+            throw BusinessException.notFound("用户不存在，userId=" + userId);
         }
 
         // 3. 写抢包记录到 MySQL
@@ -176,7 +177,7 @@ public class RedPacketServiceImpl implements RedPacketService {
     public RedPacket getRedPacket(Long id) {
         RedPacket rp = redPacketMapper.selectById(id);
         if (rp == null) {
-            throw new IllegalArgumentException("红包不存在，id=" + id);
+            throw BusinessException.notFound("红包不存在，id=" + id);
         }
         return rp;
     }

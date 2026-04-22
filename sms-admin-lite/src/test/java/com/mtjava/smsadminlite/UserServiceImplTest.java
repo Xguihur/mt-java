@@ -1,8 +1,9 @@
 package com.mtjava.smsadminlite;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.mtjava.smsadminlite.mapper.UserMapper;
+import com.mtjava.smsadminlite.common.BusinessException;
 import com.mtjava.smsadminlite.dto.UpdateUserRequest;
+import com.mtjava.smsadminlite.mapper.UserMapper;
 import com.mtjava.smsadminlite.model.User;
 import com.mtjava.smsadminlite.service.impl.UserServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
@@ -97,8 +98,8 @@ class UserServiceImplTest {
         when(userMapper.selectByPhoneExcludingId("13500000000", 4L))
                 .thenReturn(new User(8L, "别人", "13500000000", LocalDateTime.now()));
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
+        BusinessException ex = assertThrows(
+                BusinessException.class,
                 () -> userService.updateUser(4L, request)
         );
 

@@ -2,6 +2,7 @@ package com.mtjava.smsadminlite.service.impl;
 
 import com.mtjava.smsadminlite.dto.CreateUserRequest;
 import com.mtjava.smsadminlite.dto.UpdateUserRequest;
+import com.mtjava.smsadminlite.common.BusinessException;
 import com.mtjava.smsadminlite.mapper.UserMapper;
 import com.mtjava.smsadminlite.model.User;
 import com.mtjava.smsadminlite.service.UserService;
@@ -56,7 +57,7 @@ public class UserServiceImpl implements UserService {
 
         User user = userMapper.selectById(id);
         if (user == null) {
-            throw new IllegalArgumentException("用户不存在，id=" + id);
+            throw BusinessException.notFound("用户不存在，id=" + id);
         }
 
         // 旁路缓存：只有缓存未命中时才回源数据库，并把结果回填到 Redis。
@@ -70,7 +71,7 @@ public class UserServiceImpl implements UserService {
         // selectByPhone 找不到时 MyBatis 返回 null，不是 Optional，直接判空即可
         User existing = userMapper.selectByPhone(request.getPhone());
         if (existing != null) {
-            throw new IllegalArgumentException("手机号已存在，不能重复创建");
+            throw BusinessException.conflict("手机号已存在，不能重复创建");
         }
 
         User user = new User();
@@ -88,12 +89,12 @@ public class UserServiceImpl implements UserService {
     public User updateUser(Long id, UpdateUserRequest request) {
         User existing = userMapper.selectById(id);
         if (existing == null) {
-            throw new IllegalArgumentException("用户不存在，id=" + id);
+            throw BusinessException.notFound("用户不存在，id=" + id);
         }
 
         User duplicatePhoneUser = userMapper.selectByPhoneExcludingId(request.getPhone(), id);
         if (duplicatePhoneUser != null) {
-            throw new IllegalArgumentException("手机号已存在，不能重复使用");
+            throw BusinessException.conflict("手机号已存在，不能重复使用");
         }
 
         existing.setName(request.getName());

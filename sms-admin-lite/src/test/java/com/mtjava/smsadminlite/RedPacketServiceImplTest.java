@@ -1,5 +1,6 @@
 package com.mtjava.smsadminlite;
 
+import com.mtjava.smsadminlite.common.BusinessException;
 import com.mtjava.smsadminlite.mapper.RedPacketMapper;
 import com.mtjava.smsadminlite.mapper.RedPacketRecordMapper;
 import com.mtjava.smsadminlite.mapper.UserMapper;
@@ -50,8 +51,8 @@ class RedPacketServiceImplTest {
         when(redisTemplate.execute(any(RedisScript.class), eq(List.of("rp:1:grabbed", "rp:1:amounts")), eq("2")))
                 .thenReturn("DUPLICATE");
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
+        BusinessException ex = assertThrows(
+                BusinessException.class,
                 () -> redPacketService.grabRedPacket(1L, 2L)
         );
 
@@ -65,8 +66,8 @@ class RedPacketServiceImplTest {
         when(redisTemplate.execute(any(RedisScript.class), eq(List.of("rp:1:grabbed", "rp:1:amounts")), eq("2")))
                 .thenReturn("EMPTY");
 
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
+        BusinessException ex = assertThrows(
+                BusinessException.class,
                 () -> redPacketService.grabRedPacket(1L, 2L)
         );
 

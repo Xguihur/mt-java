@@ -9,6 +9,7 @@ import com.mtjava.smsadminlite.model.RedPacket;
 import com.mtjava.smsadminlite.model.RedPacketRecord;
 import com.mtjava.smsadminlite.model.User;
 import com.mtjava.smsadminlite.service.RedPacketService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -20,6 +21,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
+@Slf4j
 @Service
 public class RedPacketServiceImpl implements RedPacketService {
 
@@ -99,13 +101,18 @@ public class RedPacketServiceImpl implements RedPacketService {
     public RedPacket createRedPacket(CreateRedPacketRequest request) {
         int total = request.getTotalAmountCents();
         int count = request.getTotalCount();
+        log.info("开始创建红包，title={}, totalAmountCents={}, totalCount={}",
+                request.getTitle(), total, count);
 
         if (total < count) {
+            log.warn("创建红包失败，总金额小于红包个数，title={}, totalAmountCents={}, totalCount={}",
+                    request.getTitle(), total, count);
             throw BusinessException.badRequest("红包总金额（分）不能少于红包个数，每个红包至少 1 分");
         }
 
         // 1. 二倍均值法拆金额
         List<Integer> amounts = splitAmounts(total, count);
+        log.debug("红包拆分完成，title={}, amounts={}", request.getTitle(), amounts);
 
         // 2. 写入 MySQL
         RedPacket redPacket = new RedPacket();
@@ -121,6 +128,8 @@ public class RedPacketServiceImpl implements RedPacketService {
         String amountsKey = String.format(KEY_AMOUNTS, redPacket.getId());
         String[] amountArr = amounts.stream().map(String::valueOf).toArray(String[]::new);
         redisTemplate.opsForList().rightPushAll(amountsKey, amountArr);
+        log.info("创建红包成功，redPacketId={}, amountsKey={}, totalCount={}",
+                redPacket.getId(), amountsKey, count);
 
         return redPacket;
     }
@@ -130,6 +139,7 @@ public class RedPacketServiceImpl implements RedPacketService {
     public RedPacketRecord grabRedPacket(Long redPacketId, Long userId) {
         String grabbedKey = String.format(KEY_GRABBED, redPacketId);
         String amountsKey = String.format(KEY_AMOUNTS, redPacketId);
+        log.info("开始抢红包，redPacketId={}, userId={}", redPacketId, userId);
 
         // 1. 用 Lua 脚本把"判重 + 弹金额 + 抢完回滚资格"合成一次 Redis 原子执行
         //    返回 DUPLICATE：已抢过
@@ -141,20 +151,26 @@ public class RedPacketServiceImpl implements RedPacketService {
                 userId.toString()
         );
         if (grabResult == null) {
+            log.error("Redis 抢红包脚本返回空结果，redPacketId={}, userId={}", redPacketId, userId);
             throw new IllegalStateException("Redis 抢红包脚本执行失败");
         }
         if (LUA_DUPLICATE.equals(grabResult)) {
+            log.warn("抢红包失败，用户重复抢红包，redPacketId={}, userId={}", redPacketId, userId);
             throw BusinessException.conflict("您已经抢过这个红包了");
         }
         if (LUA_EMPTY.equals(grabResult)) {
+            log.warn("抢红包失败，红包已抢完，redPacketId={}, userId={}", redPacketId, userId);
             throw BusinessException.conflict("手慢了，红包已被抢完");
         }
 
         int amountCents = Integer.parseInt(grabResult);
+        log.info("Redis 抢红包成功，redPacketId={}, userId={}, amountCents={}",
+                redPacketId, userId, amountCents);
 
         // 2. 查用户（记录里冗余用户名，方便展示）
         User user = userMapper.selectById(userId);
         if (user == null) {
+            log.warn("抢红包失败，用户不存在，redPacketId={}, userId={}", redPacketId, userId);
             throw BusinessException.notFound("用户不存在，userId=" + userId);
         }
 
@@ -169,6 +185,8 @@ public class RedPacketServiceImpl implements RedPacketService {
 
         // 4. 原子更新 MySQL 里的剩余数量（展示用）
         redPacketMapper.decrementRemain(redPacketId, amountCents);
+        log.info("抢红包落库完成，recordId={}, redPacketId={}, userId={}, amountCents={}",
+                record.getId(), redPacketId, userId, amountCents);
 
         return record;
     }
@@ -177,14 +195,19 @@ public class RedPacketServiceImpl implements RedPacketService {
     public RedPacket getRedPacket(Long id) {
         RedPacket rp = redPacketMapper.selectById(id);
         if (rp == null) {
+            log.warn("查询红包失败，红包不存在，redPacketId={}", id);
             throw BusinessException.notFound("红包不存在，id=" + id);
         }
+        log.info("查询红包详情成功，redPacketId={}, remainCount={}, remainAmountCents={}",
+                id, rp.getRemainCount(), rp.getRemainAmountCents());
         return rp;
     }
 
     @Override
     public List<RedPacketRecord> listRecords(Long redPacketId) {
-        return recordMapper.selectByRedPacketId(redPacketId);
+        List<RedPacketRecord> records = recordMapper.selectByRedPacketId(redPacketId);
+        log.info("查询红包记录完成，redPacketId={}, recordCount={}", redPacketId, records.size());
+        return records;
     }
 
     /**

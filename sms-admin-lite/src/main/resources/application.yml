@@ -44,9 +44,14 @@ mybatis:
   # 开启驼峰映射：数据库 created_at → Java createdAt，不需要在 XML 里写 resultMap。
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # 让 SQL 日志走 SLF4J，统一接入 logback，而不是直接往控制台输出。
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
 
 logging:
+  file:
+    path: logs
   level:
     root: info
     com.mtjava.smsadminlite: debug
+    org.springframework: info
+    org.mybatis: info

@@ -6,6 +6,7 @@ import com.mtjava.smsadminlite.model.RedPacket;
 import com.mtjava.smsadminlite.model.RedPacketRecord;
 import com.mtjava.smsadminlite.service.RedPacketService;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -24,6 +25,7 @@ import java.util.List;
  * POST /api/red-packets/{id}/grab    抢红包
  * GET  /api/red-packets/{id}/records 查看抢包记录
  */
+@Slf4j
 @RestController
 @RequestMapping("/api/red-packets")
 public class RedPacketController {
@@ -36,11 +38,14 @@ public class RedPacketController {
 
     @PostMapping
     public ApiResponse<RedPacket> create(@Valid @RequestBody CreateRedPacketRequest request) {
+        log.info("收到创建红包请求，title={}, totalAmountCents={}, totalCount={}",
+                request.getTitle(), request.getTotalAmountCents(), request.getTotalCount());
         return ApiResponse.success("红包创建成功", redPacketService.createRedPacket(request));
     }
 
     @GetMapping("/{id}")
     public ApiResponse<RedPacket> detail(@PathVariable Long id) {
+        log.info("收到红包详情查询请求，redPacketId={}", id);
         return ApiResponse.success(redPacketService.getRedPacket(id));
     }
 
@@ -53,11 +58,13 @@ public class RedPacketController {
     @PostMapping("/{id}/grab")
     public ApiResponse<RedPacketRecord> grab(@PathVariable Long id,
                                              @RequestParam Long userId) {
+        log.info("收到抢红包请求，redPacketId={}, userId={}", id, userId);
         return ApiResponse.success("恭喜抢到红包", redPacketService.grabRedPacket(id, userId));
     }
 
     @GetMapping("/{id}/records")
     public ApiResponse<List<RedPacketRecord>> records(@PathVariable Long id) {
+        log.info("收到红包记录查询请求，redPacketId={}", id);
         return ApiResponse.success(redPacketService.listRecords(id));
     }
 }

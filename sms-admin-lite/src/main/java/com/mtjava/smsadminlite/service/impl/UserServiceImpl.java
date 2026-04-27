@@ -8,6 +8,7 @@ import com.mtjava.smsadminlite.model.User;
 import com.mtjava.smsadminlite.service.UserService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,6 +23,7 @@ import java.util.List;
  * 之前依赖 InMemoryUserRepository，现在改为注入 UserMapper，
  * 数据真正写入 MySQL。其他逻辑保持不变。
  */
+@Slf4j
 @Service
 public class UserServiceImpl implements UserService {
 
@@ -42,7 +44,9 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public List<User> listUsers() {
-        return userMapper.selectAll();
+        List<User> users = userMapper.selectAll();
+        log.info("用户列表查询完成，count={}", users.size());
+        return users;
     }
 
     @Override
@@ -52,25 +56,31 @@ public class UserServiceImpl implements UserService {
         // 先查 Redis，命中后直接返回，避免高频详情查询持续打到 MySQL。
         String cachedUserJson = redisTemplate.opsForValue().get(cacheKey);
         if (cachedUserJson != null) {
+            log.info("用户缓存命中，userId={}, cacheKey={}", id, cacheKey);
             return deserializeUser(cachedUserJson, id);
         }
+        log.info("用户缓存未命中，开始查询数据库，userId={}, cacheKey={}", id, cacheKey);
 
         User user = userMapper.selectById(id);
         if (user == null) {
+            log.warn("查询用户失败，用户不存在，userId={}", id);
             throw BusinessException.notFound("用户不存在，id=" + id);
         }
 
         // 旁路缓存：只有缓存未命中时才回源数据库，并把结果回填到 Redis。
         redisTemplate.opsForValue().set(cacheKey, serializeUser(user), USER_CACHE_TTL);
+        log.info("用户查询完成并写入缓存，userId={}, ttlMinutes={}", id, USER_CACHE_TTL.toMinutes());
         return user;
     }
 
     @Override
     @Transactional // 添加事务注解，确保数据一致性：一起成功或一起失败
     public User createUser(CreateUserRequest request) {
+        log.info("开始创建用户，phone={}", request.getPhone());
         // selectByPhone 找不到时 MyBatis 返回 null，不是 Optional，直接判空即可
         User existing = userMapper.selectByPhone(request.getPhone());
         if (existing != null) {
+            log.warn("创建用户失败，手机号重复，phone={}", request.getPhone());
             throw BusinessException.conflict("手机号已存在，不能重复创建");
         }
 
@@ -81,19 +91,23 @@ public class UserServiceImpl implements UserService {
 
         // insert 执行后，user.id 会被 MyBatis 自动回填（useGeneratedKeys）
         userMapper.insert(user);
+        log.info("创建用户成功，userId={}, phone={}", user.getId(), user.getPhone());
         return user;
     }
 
     @Override
     @Transactional
     public User updateUser(Long id, UpdateUserRequest request) {
+        log.info("开始更新用户，userId={}, newPhone={}", id, request.getPhone());
         User existing = userMapper.selectById(id);
         if (existing == null) {
+            log.warn("更新用户失败，用户不存在，userId={}", id);
             throw BusinessException.notFound("用户不存在，id=" + id);
         }
 
         User duplicatePhoneUser = userMapper.selectByPhoneExcludingId(request.getPhone(), id);
         if (duplicatePhoneUser != null) {
+            log.warn("更新用户失败，手机号被占用，userId={}, phone={}", id, request.getPhone());
             throw BusinessException.conflict("手机号已存在，不能重复使用");
         }
 
@@ -103,6 +117,7 @@ public class UserServiceImpl implements UserService {
 
         // 先更新数据库，再删除缓存。下次查询会自动回源数据库并重建最新缓存。
         redisTemplate.delete(buildUserCacheKey(id));
+        log.info("更新用户成功并清理缓存，userId={}, phone={}", id, existing.getPhone());
         return existing;
     }
 
@@ -110,6 +125,7 @@ public class UserServiceImpl implements UserService {
         try {
             return objectMapper.writeValueAsString(user);
         } catch (JsonProcessingException e) {
+            log.error("用户缓存序列化失败，userId={}", user.getId(), e);
             throw new IllegalStateException("用户缓存序列化失败，id=" + user.getId(), e);
         }
     }
@@ -118,6 +134,7 @@ public class UserServiceImpl implements UserService {
         try {
             return objectMapper.readValue(cachedUserJson, User.class);
         } catch (JsonProcessingException e) {
+            log.error("用户缓存反序列化失败，userId={}", userId, e);
             throw new IllegalStateException("用户缓存反序列化失败，id=" + userId, e);
         }
     }

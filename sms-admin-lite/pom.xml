@@ -52,6 +52,14 @@
             <artifactId>spring-boot-starter-data-redis</artifactId>
         </dependency>
 
+        <!-- Lombok 依赖。
+             作用：使用 @Slf4j、@Getter 等注解减少样板代码，让日志写法和参考项目保持一致。 -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <!-- H2 内存数据库（仅测试用）。
              作用：跑单测时不需要真实 MySQL，用 H2 替代。 -->
         <dependency>

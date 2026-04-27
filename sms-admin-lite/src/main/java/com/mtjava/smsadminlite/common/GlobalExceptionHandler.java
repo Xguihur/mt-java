@@ -4,8 +4,7 @@ package com.mtjava.smsadminlite.common;
 // 当你在参数上使用 @NotBlank、@Min、@Valid 这类校验注解时，
 // 校验失败后，框架可能抛出这里相关的异常。
 import jakarta.validation.ConstraintViolationException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
@@ -42,10 +41,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * 3. Spring 发现这里有匹配的 @ExceptionHandler 方法
  * 4. 把异常转换成统一的 ApiResponse 返回给前端
  */
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
-
-    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     /**
      * 处理 @RequestBody + @Valid 触发的参数校验异常。
@@ -67,6 +65,7 @@ public class GlobalExceptionHandler {
                 // 如果拿到了字段错误，就把注解里定义的错误消息返回给前端。
                 // 比如 @NotBlank(message = "用户名不能为空")
                 : exception.getBindingResult().getFieldError().getDefaultMessage();
+        log.warn("请求体参数校验失败: {}", message);
 
         // ApiResponse<Void> 表示这是一个统一返回体，但 data 部分没有实际数据。
         // fail(message) 会构造 code = -1、message = 错误信息、data = null 的响应。
@@ -85,6 +84,7 @@ public class GlobalExceptionHandler {
         String message = exception.getBindingResult().getFieldError() == null
                 ? "参数绑定失败"
                 : exception.getBindingResult().getFieldError().getDefaultMessage();
+        log.warn("请求参数绑定失败: {}", message);
         return buildErrorResponse(HttpStatus.BAD_REQUEST, message);
     }
 
@@ -100,6 +100,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleConstraintViolation(ConstraintViolationException exception) {
         // 这里直接把异常信息原样返回。
         // 它通常会包含是哪一个参数、违反了什么规则。
+        log.warn("约束校验失败: {}", exception.getMessage());
         return buildErrorResponse(HttpStatus.BAD_REQUEST, exception.getMessage());
     }
 
@@ -114,6 +115,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ApiResponse<Void>> handleHttpMessageNotReadable(HttpMessageNotReadableException exception) {
         // 这里没有直接暴露底层异常细节，而是返回一个更友好的提示。
+        log.warn("请求体反序列化失败", exception);
         return buildErrorResponse(HttpStatus.BAD_REQUEST, "请求体格式不正确，请检查 JSON 是否合法");
     }
 
@@ -127,6 +129,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException exception) {
+        log.warn("业务异常: status={}, message={}", exception.getStatus().value(), exception.getMessage());
         return buildErrorResponse(exception.getStatus(), exception.getMessage());
     }
 

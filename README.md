@@ -5,9 +5,9 @@
 它参考了 `/Users/xiaolongxia/Desktop/shuoruan/project/sms/sms-parent` 的父子模块思路，并重点模拟了 `sms-admin` 常见的后端分层方式，但做了几轮剪枝：
 
 - 保留 Maven 父子模块结构，帮助你熟悉真正项目的组织方式。
-- 保留 `controller -> service -> repository` 的调用链，帮助你理解请求是怎么一层层流转的。
-- 去掉数据库、MyBatis、RabbitMQ、Redis、OSS、动态数据源、邮件、定时任务等复杂依赖，先把 Spring Boot 主线打通。
-- 用“内存仓库”代替数据库，便于你专注在 Java 语法、注解、分层和接口设计上。
+- 保留 `controller -> service -> mapper` 的调用链，帮助你理解请求是怎么一层层流转的。
+- 先保留 Spring Boot 主线，并逐步接入 MySQL、MyBatis、Redis 这些常见后端组件。
+- 让你在学习 Controller、Service、Mapper 分层的同时，也熟悉真实项目里的基础环境配置。
 
 ## 项目结构
 
@@ -25,10 +25,12 @@ mt-java
         │   │   ├── controller  # 接口层，负责接收 HTTP 请求
         │   │   ├── dto         # 请求参数对象
         │   │   ├── model       # 领域模型
-        │   │   ├── repository  # 数据访问层的练习版，用内存代替数据库
+        │   │   ├── mapper      # MyBatis Mapper 接口
         │   │   └── service     # 业务层，编排业务逻辑
         │   └── resources
-        │       └── application.yml
+        │       ├── application.yml
+        │       ├── application-local.yml
+        │       └── application-prod.yml
         └── test
 ```
 
@@ -38,8 +40,8 @@ mt-java
   你以后在 `sms-admin` 里会看到很多 `xxxController`，它们负责暴露接口。
 - `service`
   对应真实项目里的业务服务层，负责“处理规则”，而不是直接写接口细节。
-- `repository`
-  这里只是教学用名字。在真实项目里，这一层通常会换成 `mapper` 或 `dao`，再通过 MyBatis/MyBatis-Plus 连数据库。
+- `mapper`
+  这一层通过 MyBatis 连接数据库，负责把 Java 方法和 SQL 语句关联起来。
 - `common`
   对应真实项目里统一响应、异常处理、基础工具类这类公共内容。
 - `config`
@@ -54,12 +56,18 @@ mt-java
 3. 再学参数校验、统一响应、异常处理。
 4. 最后再接数据库、MyBatis、Redis、MQ。
 
-所以这里先只保留：
+当前这版主要使用：
 
 - `spring-boot-starter-web`
   用来写最基本的 Web 接口。
 - `spring-boot-starter-validation`
   用来做参数校验，比如用户名不能为空。
+- `mybatis-spring-boot-starter`
+  用来管理 Mapper 和 SQL 映射。
+- `mysql-connector-j`
+  用来连接 MySQL。
+- `spring-boot-starter-data-redis`
+  用来接入 Redis。
 - `spring-boot-starter-test`
   用来写最基础的接口测试。
 
@@ -68,8 +76,22 @@ mt-java
 在项目根目录执行：
 
 ```bash
-mvn -pl sms-admin-lite spring-boot:run
+mvn -pl sms-admin-lite spring-boot:run -Dspring-boot.run.profiles=local
 ```
+
+如果要模拟生产环境启动：
+
+```bash
+java -jar sms-admin-lite/target/sms-admin-lite-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
+```
+
+环境配置说明：
+
+- `application.yml`：公共配置
+- `application-local.yml`：本地开发配置
+- `application-prod.yml`：生产环境配置
+
+其中生产环境推荐通过环境变量提供数据库、Redis 和日志目录等敏感配置。
 
 启动后访问：
 
@@ -90,7 +112,7 @@ POST 示例：
 
 1. 先看 `SmsAdminLiteApplication`，理解 Spring Boot 如何启动。
 2. 再看 `UserController`，理解接口如何接收请求。
-3. 再看 `UserService` 和 `InMemoryUserRepository`，理解分层。
+3. 再看 `UserService` 和 `UserMapper`，理解分层。
 4. 再看 `ApiResponse` 和 `GlobalExceptionHandler`，理解统一返回和异常处理。
 5. 最后自己尝试加一个“删除用户”接口。
 
@@ -98,7 +120,7 @@ POST 示例：
 
 你学完这一版后，可以按这个顺序升级：
 
-1. 给 `repository` 换成 MyBatis `mapper`
+1. 继续完善 `mapper`、SQL 和数据库设计
 2. 接入 MySQL
 3. 增加 `entity / vo / dto` 的区分
 4. 增加拦截器和登录校验
